@@ -3,6 +3,7 @@ import {
   AmbientLight,
   BackSide,
   BoxGeometry,
+  BufferGeometry,
   CapsuleGeometry,
   Clock,
   Color,
@@ -25,6 +26,7 @@ import {
   TextureLoader,
   TorusGeometry,
   Vector2,
+  Vector3,
   WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -98,6 +100,37 @@ function lineplot(x0: number, y0: number, x1: number, y1: number, plot: (x: numb
     }
 }
 
+function make_skybox(sides: number): BufferGeometry {
+  const geometry = new BufferGeometry();
+
+  const v0 = new Vector3();
+
+  const xyz = new Float32Array(3 * sides * 2);
+
+  for (let i = 0; i < sides; ++i) {
+    const a = Math.PI * 2 / sides * i;
+    const x = Math.cos(a);
+    const z = Math.sin(a);
+    
+    v0.set(x, .5, z);
+    v0.toArray(xyz, i * 3);
+  }
+
+  for (let i = 0; i < sides; ++i) {
+    const a = Math.PI * 2 / sides * i;
+    const x = Math.cos(a);
+    const z = Math.sin(a);
+    
+    v0.set(x, .5, z);
+    v0.toArray(xyz, i * 3);
+  }
+
+  return geometry;
+}
+
+const settings = { move: false, dragging: false, color: "#ff0000" };
+const size = 256;
+
 init()
 
 function init() {
@@ -112,8 +145,8 @@ function init() {
   }
 
   const canvas2 = document.createElement("canvas");
-  canvas2.width = 256;
-  canvas2.height = 256;
+  canvas2.width = size;
+  canvas2.height = size;
 
   ctx = canvas2.getContext("2d")!;
 
@@ -137,7 +170,7 @@ function init() {
   // ===== 🎥 CAMERA =====
   {
     camera = new PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000)
-    camera.position.set(2, 2, 5)
+    camera.position.set(0, 1, 0)
   }
 
   // ===== 💡 LIGHTS =====
@@ -154,6 +187,9 @@ function init() {
     cameraControls.target.set(0, 1, 0);
     cameraControls.enableDamping = true
     cameraControls.autoRotate = false
+    cameraControls.enableZoom = false;
+    cameraControls.enablePan = false;
+    cameraControls.rotateSpeed = -1;
     cameraControls.update()
 
     // Full screen
@@ -183,8 +219,22 @@ function init() {
 
   // ==== 🐞 DEBUG GUI ====
   {
-    gui = new GUI({ title: '🐞 Debug GUI', width: 300 })
+    gui = new GUI({ title: '🐞 Debug GUI', width: 300 });
+    gui.add(settings, "move");
+    gui.addColor(settings, "color");
   }
+
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    settings.dragging = true;
+    
+    pointer.set(event.x, event.y);
+    p0.copy(pointer);
+    p1.copy(pointer);
+  });
+
+  window.addEventListener("pointerup", (event) => {
+    settings.dragging = false;
+  });
 }
 
 function animate() {
@@ -203,13 +253,13 @@ function animate() {
 
   const [first] = raycaster.intersectObject(skybox);
 
-  if (first && first.uv) {
+  if (first && first.uv && !settings.move && settings.dragging) {
     const x = (2 + first.uv.x) % 1;
     const y = (2 - first.uv.y) % 1;
 
-    p1.set(Math.round(x * 255), Math.round(y * 255));
+    p1.set(Math.round(x * size), Math.round(y * size));
 
-    ctx.fillStyle = "red";
+    ctx.fillStyle = settings.color;
 
     const d = p0.distanceTo(p1);
 
@@ -230,10 +280,10 @@ function animate() {
   p0.copy(p1);
 
   cameraControls.update()
-  cameraControls.enabled = false;
+  cameraControls.enabled = settings.move;
   
   renderer.render(scene, camera)
   stats.end()
 
-  skybox.rotation.y += dt * .25;
+  // skybox.rotation.y += dt * .25;
 }
