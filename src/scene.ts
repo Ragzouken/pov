@@ -72,6 +72,34 @@ document.addEventListener("pointermove", (event) => {
   pointer.set(event.x, event.y);
 });
 
+function saveAs(blob: Blob, name: string) {
+    const element = document.createElement("a");
+    const url = window.URL.createObjectURL(blob);
+    element.href = url;
+    element.download = name;
+    element.click();
+    window.URL.revokeObjectURL(url);
+};
+
+async function pickFiles(accept = "*", multiple = false): Promise<File[]> {
+  return new Promise((resolve) => {
+      const fileInput = document.createElement("input");
+      fileInput.setAttribute("type", "file");
+      fileInput.setAttribute("multiple", "");
+      fileInput.style.visibility = "collapse";
+      
+      document.body.append(fileInput);
+      function done(files) {
+          fileInput.remove();
+          resolve(files);
+      } 
+
+      fileInput.addEventListener("change", () => done(Array.from(fileInput.files)));
+      fileInput.addEventListener("cancel", () => done([]));
+      fileInput.click();
+  });
+}
+
 function lineplot(x0: number, y0: number, x1: number, y1: number, plot: (x: number, y: number) => undefined) {
     x0 |= 0; y0 |= 0; x1 |= 0; y1 |= 0;
 
@@ -217,11 +245,38 @@ function init() {
     document.body.appendChild(stats.dom)
   }
 
+  async function load(files: File[]) {
+    const [file] = files;
+
+    const url = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(file); 
+    });
+
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = document.createElement("img");
+      img.src = url;
+      if (img.complete) {
+        resolve(img);
+      } else {
+        img.onload = () => resolve(img);
+      }
+    });
+
+    ctx.drawImage(img, 0, 0);
+    material.needsUpdate = true;
+    texture.needsUpdate = true;
+  }
+
   // ==== 🐞 DEBUG GUI ====
   {
     gui = new GUI({ title: '🐞 Debug GUI', width: 300 });
     gui.add(settings, "move");
     gui.addColor(settings, "color");
+    gui.add({ export: () => canvas2.toBlob((blob) => saveAs(blob, "scene.png"), "png") }, "export");
+    gui.add({ import: () => pickFiles("*.png").then(load) }, "import");
   }
 
   renderer.domElement.addEventListener("pointerdown", (event) => {
